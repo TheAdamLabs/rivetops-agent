@@ -14,8 +14,9 @@ Terraform modules that deploy the full RivetOps agent stack **into your own clou
 
 - **Lambda function** — packages and runs `runtime/aws` + the specified plugin
 - **EventBridge rule** — triggers Lambda on a schedule (default: every 5 minutes)
-- **SNS topic** — receives structured findings; you subscribe Slack, PagerDuty, email, or any HTTPS endpoint
-- **IAM execution role** — read-only access to your own account; no cross-account permissions
+- **SNS topic** — receives findings on state transitions only (new, re-alert, resolved); you subscribe your own endpoints
+- **DynamoDB table** — finding state store for deduplication; on-demand billing, TTL-managed, negligible cost
+- **IAM execution role** — read-only access to your own account + `sns:Publish` + scoped DynamoDB access
 
 ## Usage (AWS)
 
