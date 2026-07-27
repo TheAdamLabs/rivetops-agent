@@ -13,16 +13,75 @@ The AWS Lambda execution shell for the RivetOps agent. Runs **inside the custome
      "snsTopicArn": "arn:aws:sns:us-east-1:123456789012:rivetops-findings",
      "stateTableName": "rivetops-finding-state",
      "suppressionWindowHours": 4,
+     "customInstructions": "Focus on EKS clusters. Ignore batch-worker CPU spikes.",
+     "extraPlugins": [],
      "dashboardEndpoint": "https://api.rivetops.pro",
      "token": "<per-tenant bearer token>"
    }
    ```
-2. Boots the Pi SDK and loads the specified plugin from `plugins/<pluginId>`.
-3. Plugin reads CloudWatch, CloudTrail, EC2, ECS, EKS using the Lambda's IAM execution role.
-4. Plugin returns a list of structured findings with fingerprint fields and narrative fields (see `plugins/sre/README.md`).
-5. For each finding: checks DynamoDB to decide whether SNS should fire (rate limiting).
-6. Publishes to SNS for findings outside their suppression window.
-7. Posts all findings to the RivetOps dashboard API regardless of suppression (optional).
+2. Boots a **pi.dev SDK session** in headless mode, loading the specified plugin's skill files and any extra packages.
+3. The agent uses `bash` + AWS CLI (available in Lambda) to read CloudWatch, CloudTrail, EC2, ECS, EKS — no custom tool wrappers needed.
+4. Returns a structured findings list. For each finding: checks DynamoDB (rate limiting), publishes to SNS.
+5. Posts all findings to the RivetOps dashboard API regardless of suppression (optional).
+
+---
+
+## Pi.dev SDK integration
+
+`runtime/aws` uses the [pi.dev SDK](https://pi.dev/) (`@earendil-works/pi-coding-agent`) in **headless mode** — no TTY, no interactive loop. The Lambda starts a pi agent session, runs to completion, and exits.
+
+```typescript
+import { createAgentSession } from "@earendil-works/pi-coding-agent";
+
+export async function handler(event: RivetOpsEvent) {
+  const session = await createAgentSession({
+    systemPrompt: event.customInstructions,  // from Terraform/CDK input
+    skills: [
+      `${__dirname}/../../plugins/${event.pluginId}`,  // skill markdown files
+    ],
+    runMode: "print",  // non-interactive: run to completion, return output
+  });
+
+  const result = await session.prompt(
+    "Analyze this AWS account for infrastructure anomalies and return your findings."
+  );
+
+  const findings = parseFindings(result);
+  await processFindings(findings, event);
+}
+```
+
+The session uses the Lambda's ambient AWS credentials (from the IAM execution role) via the standard AWS SDK/CLI credential chain. No `sts:AssumeRole`, no cross-account, same account only.
+
+### Why no custom tools
+
+Plugins are **skill markdown files**, not TypeScript tool wrappers. The agent already has `bash` built in, and the AWS CLI is available in the Lambda runtime environment. Skill files tell the agent which commands to run and how to interpret output — no code to write or maintain.
+
+---
+
+## Custom instructions
+
+`custom_instructions` (Terraform) / `customInstructions` (CDK) is a multiline string injected as additional system prompt on every run. Use it to tailor the agent to your environment without forking:
+
+```hcl
+custom_instructions = <<-EOT
+  Focus on our EKS clusters in us-east-1: prod-cluster, staging-cluster.
+  Ignore CPU spikes on instances tagged Role=batch-worker — expected behavior.
+  For any RDS finding, include the current replica lag from CloudWatch.
+EOT
+```
+
+---
+
+## Extra plugins
+
+`extra_plugins` (Terraform) / `extraPlugins` (CDK) is a list of pi package names from the [pi package catalog](https://pi.dev/packages) or your private registry. They are bundled into the Lambda at deploy time by the Terraform/CDK build step — not downloaded at runtime.
+
+```hcl
+extra_plugins = [
+  "@your-org/custom-runbook-skill",  # your own skill markdown package
+]
+```
 
 ---
 
@@ -41,7 +100,7 @@ For each finding:
 TTL expires → record deleted automatically → next detection triggers a fresh alert
 ```
 
-This is rate limiting, not incident lifecycle management. There is no explicit "resolved" event — incident lifecycle is the customer's alerting tool's responsibility (PagerDuty dedup keys, Opsgenie alert deduplication, etc.).
+This is rate limiting, not incident lifecycle management. There is no "resolved" event — incident lifecycle is the customer's alerting tool's responsibility (PagerDuty dedup keys, Opsgenie deduplication, etc.).
 
 ### DynamoDB record
 
@@ -63,7 +122,7 @@ This is rate limiting, not incident lifecycle management. There is no explicit "
 ## Notification flow
 
 ```
-Plugin returns findings list
+Pi session returns findings list
   ↓
 For each finding:
   Check DynamoDB fingerprint
@@ -92,16 +151,6 @@ Created by `infra/terraform/aws`. Permissions:
 | `dynamodb:GetItem`, `PutItem`, `UpdateItem`, `DeleteItem` | Finding state table only |
 
 Never reaches outside the customer's AWS account.
-
----
-
-## What `infra/terraform/aws` deploys
-
-- Lambda function (this code + specified plugin)
-- EventBridge rule + scheduler
-- SNS topic (customer subscribes their own endpoints)
-- DynamoDB table (suppression state, on-demand billing, TTL enabled)
-- IAM execution role with the permissions above
 
 ---
 

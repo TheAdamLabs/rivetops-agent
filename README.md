@@ -32,9 +32,9 @@ plugins/
 
 **`infra/`** — what you run once to deploy the agent into your account. Deploys the Lambda, EventBridge scheduler, IAM execution role, and notification topic.
 
-**`runtime/`** — the Lambda handler code. Packaged by `infra/` during deployment. Not deployed standalone.
+**`runtime/`** — the Lambda handler. Boots a [pi.dev](https://pi.dev/) SDK session in headless mode, loads the plugin skill files, and runs the agent to completion. Packaged by `infra/` — not deployed standalone.
 
-**`plugins/`** — intelligence layer. Self-contained Pi extensions. New RivetOps capabilities ship as new folders here, with zero changes to `infra/` or `runtime/`.
+**`plugins/`** — intelligence layer. Each plugin is a directory of **pi.dev skill files** (markdown). The agent uses `bash` + AWS CLI to read your infrastructure — no custom tool wrappers to write or maintain. New RivetOps capabilities ship as new plugin folders with zero changes to `infra/` or `runtime/`.
 
 ---
 
@@ -81,6 +81,15 @@ Your AWS account
 module "rivetops" {
   source    = "github.com/TheAdamLabs/rivetops-agent//infra/terraform/aws"
   plugin_id = "sre"
+
+  # Tailor the agent to your environment - injected as system prompt on every run
+  custom_instructions = <<-EOT
+    Focus on our EKS clusters: prod-cluster, staging-cluster (us-east-1).
+    Ignore CPU spikes on instances tagged Role=batch-worker - expected behavior.
+  EOT
+
+  # Optional: add pi packages from https://pi.dev/packages or your private registry
+  # extra_plugins = ["@your-org/custom-runbook-skill"]
 
   # Optional: connect the RivetOps managed dashboard
   dashboard_endpoint = "https://api.rivetops.pro"

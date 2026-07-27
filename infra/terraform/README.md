@@ -22,9 +22,19 @@ Terraform modules that deploy the full RivetOps agent stack **into your own clou
 
 ```hcl
 module "rivetops" {
-  source                  = "github.com/TheAdamLabs/rivetops-agent//infra/terraform/aws"
-  plugin_id               = "sre"
+  source                   = "github.com/TheAdamLabs/rivetops-agent//infra/terraform/aws"
+  plugin_id                = "sre"
   suppression_window_hours = 4    # how long to suppress re-alerts for the same finding
+
+  # Injected as additional system prompt on every agent run
+  custom_instructions = <<-EOT
+    Focus on our EKS clusters: prod-cluster, staging-cluster (us-east-1).
+    Ignore CPU spikes on instances tagged Role=batch-worker - expected behavior.
+    For any RDS finding, include the current replica lag from CloudWatch.
+  EOT
+
+  # Pi packages bundled into the Lambda at deploy time (from https://pi.dev/packages or private registry)
+  # extra_plugins = ["@your-org/custom-runbook-skill"]
 
   # Optional: connect to the RivetOps managed dashboard
   dashboard_endpoint = "https://api.rivetops.pro"

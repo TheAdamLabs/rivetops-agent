@@ -15,7 +15,16 @@ const stack = new Stack(app, "RivetOpsStack");
 
 const agent = new RivetOpsAgent(stack, "RivetOps", {
   pluginId: "sre",
-  suppressionWindowHours: 4,      // default; how long to suppress re-alerts for the same finding
+  suppressionWindowHours: 4,  // how long to suppress re-alerts for the same finding
+
+  // Injected as additional system prompt on every agent run
+  customInstructions: `
+    Focus on our EKS clusters: prod-cluster, staging-cluster (us-east-1).
+    Ignore CPU spikes on instances tagged Role=batch-worker - expected behavior.
+  `,
+
+  // Pi packages bundled into the Lambda at deploy time (from https://pi.dev/packages or private registry)
+  // extraPlugins: ["@your-org/custom-runbook-skill"],
 
   // Optional: connect to the RivetOps managed dashboard
   dashboardEndpoint: "https://api.rivetops.pro",
