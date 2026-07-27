@@ -42,23 +42,7 @@ plugins/
 
 The entire agent runs **in your own cloud account**. Findings are delivered via a cloud-native notification topic in your account — no RivetOps dependency required. Connecting the dashboard is optional and adds historical view, cross-account aggregation, and richer alerting.
 
-```
-Your AWS account (everything runs here)
-┌────────────────────────────────────────────────────────────┐
-│  EventBridge Scheduler (every 5 minutes)                   │
-│        ↓                                                   │
-│  Lambda  ←  runtime/aws  +  plugins/sre                    │
-│        ↓ reads your own account data                       │
-│  CloudWatch / CloudTrail / EC2 / ECS / EKS                 │
-│        ↓                                                   │
-│  SNS Topic  ──→  Slack / PagerDuty / email / webhook       │
-└────────────────────────────────────────────────────────────┘
-          ↓ also posts findings via HTTPS (optional)
-┌─────────────────────────────────────────────┐
-│  RivetOps Dashboard — rivetops.pro          │
-│  historical view, multi-account, richer UI  │
-└─────────────────────────────────────────────┘
-```
+![AWS architecture diagram](docs/aws-architecture.svg)
 
 | Cloud | Notification service |
 |-------|---------------------|
