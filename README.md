@@ -4,7 +4,7 @@
 
 # rivetops-agent
 
-**Open-source onboarding modules, Lambda execution shell, and SRE plugin for [RivetOps](https://rivetops.pro).**
+**The full RivetOps agent stack - runs entirely in your own cloud account.**
 
 AI cloud monitoring for AWS, Azure, and GCP — autonomous, 24/7, no dashboards.
 
@@ -20,41 +20,47 @@ AI cloud monitoring for AWS, Azure, and GCP — autonomous, 24/7, no dashboards.
 
 ```
 infra/
-├── terraform/         Cross-account role setup (aws/, azure/, gcp/)
-├── cdk/               AWS CDK TypeScript construct (equivalent to terraform/aws/)
-└── agent-lambda/      Agnostic Lambda shell that loads any plugin at runtime
+├── terraform/         Full agent stack via Terraform (aws/, azure/, gcp/)
+└── cdk/               AWS CDK TypeScript alternative
+
+runtime/
+└── aws/               Lambda handler code (packaged by infra/terraform/aws)
 
 plugins/
 └── sre/               SRE intelligence — anomaly detection, incident correlation
 ```
 
-**`infra/`** — infrastructure glue. Customers apply one of these to their cloud account to grant RivetOps read-only access. No credentials are stored. Access is revoked by deleting the role.
+**`infra/`** — what you run once to deploy the agent into your account. Deploys the Lambda, EventBridge scheduler, and IAM execution role.
 
-**`plugins/`** — intelligence layer. Each plugin is a self-contained Pi extension that tells the agent what to look for and how to reason about it. New RivetOps capabilities ship as new folders here.
+**`runtime/`** — the Lambda handler code. Packaged by `infra/` during deployment. Not deployed standalone.
+
+**`plugins/`** — intelligence layer. Self-contained Pi extensions. New RivetOps capabilities ship as new folders here, with zero changes to `infra/` or `runtime/`.
 
 ---
 
 ## How it works
 
+The entire agent runs **in your own cloud account**. RivetOps hosts only the dashboard.
+
 ```
-Customer Cloud Account          RivetOps SaaS
-┌──────────────────────┐        ┌──────────────────────────────┐
-│  IAM Role (AWS)      │◄───────│  infra/agent-lambda          │
-│  Service Principal   │ cross  │    loads plugins/sre         │
-│  Service Account     │ account│  EventBridge Scheduler       │
-│  (read-only trust)   │        │  Control Plane + Dashboard   │
-└──────────────────────┘        └──────────────────────────────┘
-          ▲
-          │ applied once via
-   infra/terraform  or  infra/cdk
+Your AWS account (everything runs here)
+┌──────────────────────────────────────────────────────┐
+│  EventBridge Scheduler (every 5 minutes)             │
+│        ↓                                             │
+│  Lambda  ←  runtime/aws  +  plugins/sre              │
+│        ↓ reads your own account data                 │
+│  CloudWatch / CloudTrail / EC2 / ECS / EKS           │
+└──────────────────────────────────────────────────────┘
+          ↓ posts findings via HTTPS
+┌─────────────────────────────────┐
+│  RivetOps Dashboard (private)   │
+└─────────────────────────────────┘
 ```
 
-1. Apply `infra/terraform` or `infra/cdk` — creates a read-only cross-account role in your cloud account.
-2. Paste the output role identifier into the [RivetOps dashboard](https://rivetops.pro).
-3. RivetOps runs `infra/agent-lambda` on a schedule, loading `plugins/sre`.
-4. The plugin assumes your role, reads cloud telemetry, and posts findings.
-
-Everything in this repo runs **in your cloud account** — you pay pennies for Lambda execution, RivetOps never touches your infrastructure directly.
+1. Run `infra/terraform` or `infra/cdk` — deploys the full agent stack into your account.
+2. Paste the connection token into the [RivetOps dashboard](https://rivetops.pro).
+3. The Lambda runs on a schedule, loads `plugins/sre`, reads your CloudWatch / CloudTrail / EC2.
+4. Findings appear in the dashboard. Your on-call team gets notified before the pager fires.
 
 ---
 
@@ -62,21 +68,19 @@ Everything in this repo runs **in your cloud account** — you pay pennies for L
 
 ```hcl
 module "rivetops" {
-  source          = "rivetops/onboarding/aws"
-  saas_account_id = "123456789012"
-}
-
-output "role_arn" {
-  value = module.rivetops.role_arn
+  source             = "github.com/TheAdamLabs/rivetops-agent//infra/terraform/aws"
+  plugin_id          = "sre"
+  dashboard_endpoint = "https://api.rivetops.pro"
+  connection_token   = var.rivetops_token
 }
 ```
 
 ```bash
 terraform apply
-# Copy the role_arn output → paste into rivetops.pro dashboard
+# Agent is running in your account
 ```
 
-That is the entire setup. See [`infra/terraform/`](./infra/terraform/README.md) for all providers.
+See [`infra/terraform/`](./infra/terraform/README.md) for all providers and options.
 
 ---
 
@@ -84,18 +88,32 @@ That is the entire setup. See [`infra/terraform/`](./infra/terraform/README.md) 
 
 | Concern | Mechanism |
 |---------|-----------|
-| No credential storage | STS temp credentials only, 1h TTL, never persisted |
-| Blast radius | `ReadOnlyAccess` policy — no write permissions |
-| Instant revocation | Delete the IAM role and access ends immediately |
-| Auditable | This entire repo is open source — review before you apply |
+| No RivetOps access to your infra | Agent runs in your account - RivetOps never touches it directly |
+| Read-only | IAM execution role has `ReadOnlyAccess` scoped to your own account only |
+| Instant revocation | `terraform destroy` removes everything; access ends immediately |
+| Auditable | This entire repo is open source - review every line before deploying |
+
+---
+
+## Roadmap
+
+| Plugin | Capability | Status |
+|--------|------------|--------|
+| `plugins/sre` | Anomaly detection, incident correlation | Live |
+| `plugins/finops` | Cost anomaly, rightsizing | Q3 2026 |
+| `plugins/security` | IAM drift, misconfiguration | Q4 2026 |
+| `plugins/compliance` | CIS benchmarks, audit trails | 2027 |
+
+New capability = new plugin folder. Zero changes to `infra/` or `runtime/`.
 
 ---
 
 ## Contributing
 
-Issues and PRs are welcome. The highest-value contributions right now:
+Issues and PRs are welcome. Highest-value contributions right now:
 
 - `infra/terraform/azure/` and `infra/terraform/gcp/` — these stubs need real Terraform
+- `runtime/azure/` and `runtime/gcp/` — Function/Cloud Run handler equivalents
 - `plugins/sre/` — expanding coverage to ECS, EKS, RDS, VPC Flow Logs
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) to get started.

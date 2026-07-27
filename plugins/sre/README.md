@@ -1,13 +1,12 @@
 # plugins/sre
 
-SRE intelligence plugin for RivetOps. Turns the generic `infra/agent-lambda` shell into an autonomous SRE monitor — anomaly detection, incident correlation, and plain-English findings.
+SRE intelligence plugin for RivetOps. Loaded by `runtime/aws` at invocation time - turns the generic Lambda shell into an autonomous SRE monitor: anomaly detection, incident correlation, and plain-English findings.
 
 ## What it does
 
-1. Assumes the customer's read-only cross-account role via STS.
-2. Reads CloudWatch metrics, CloudTrail events, and EC2/ECS/EKS state.
-3. Correlates signals across services to identify anomalies.
-4. Posts structured findings to the RivetOps control plane.
+1. Reads CloudWatch metrics, CloudTrail events, and EC2/ECS/EKS state using the Lambda's own IAM execution role (no cross-account - the Lambda runs in the customer's account).
+2. Correlates signals across services to identify anomalies.
+3. Posts structured findings to the RivetOps findings API over HTTPS.
 
 ## Finding format
 

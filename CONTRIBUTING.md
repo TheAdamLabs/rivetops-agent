@@ -7,14 +7,15 @@ Thanks for your interest in contributing. This repo is MIT licensed and communit
 ## What lives here
 
 ```
-infra/terraform/     Terraform modules (aws/, azure/, gcp/)
-infra/cdk/           AWS CDK TypeScript construct
-infra/agent-lambda/  Agnostic Lambda execution shell
+infra/terraform/     Full agent stack via Terraform (aws/, azure/, gcp/)
+infra/cdk/           AWS CDK TypeScript alternative
+runtime/aws/         Lambda handler code (packaged by infra/terraform/aws)
 plugins/sre/         SRE intelligence plugin
 ```
 
 The highest-value contributions right now are:
 - **`infra/terraform/azure/`** and **`infra/terraform/gcp/`** — these stubs need real Terraform
+- **`runtime/azure/`** and **`runtime/gcp/`** — Function/Cloud Run handler equivalents
 - **`plugins/sre/`** — expanding cloud service coverage (ECS, EKS, RDS, VPC)
 - Bug fixes and documentation improvements anywhere
 
@@ -38,12 +39,12 @@ The highest-value contributions right now are:
 
 ---
 
-## Adding a new cloud provider (`infra/terraform/`)
+## Adding a new cloud provider
 
-1. Create a subfolder: `infra/terraform/<provider>/`.
-2. Follow the pattern in `infra/terraform/aws/` — module inputs, role/principal output, README.
-3. The output must be a single identifier the user pastes into the RivetOps dashboard.
-4. Document the exact permissions granted and how to revoke access.
+1. Create `infra/terraform/<provider>/` — module that deploys Lambda/Function + scheduler + execution identity.
+2. Create `runtime/<provider>/` — the Function handler code packaged by the Terraform module.
+3. Follow the pattern in `infra/terraform/aws/` and `runtime/aws/` — event payload format, plugin loading, findings API call.
+4. Document the exact permissions granted to the execution identity and how to revoke access.
 
 ---
 
