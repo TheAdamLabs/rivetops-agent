@@ -115,12 +115,12 @@ See [`infra/terraform/`](./infra/terraform/README.md) for all providers and opti
 
 ## Roadmap
 
-| Plugin | Capability | Status |
-|--------|------------|--------|
-| `plugins/sre` | Anomaly detection, incident correlation | In Development |
-| `plugins/finops` | Cost anomaly, rightsizing | Q3 2026 |
-| `plugins/security` | IAM drift, misconfiguration | Q4 2026 |
-| `plugins/compliance` | CIS benchmarks, audit trails | 2027 |
+| | AWS | Azure | GCP |
+|---|---|---|---|
+| **SRE monitoring** | In Development | Planned | Planned |
+| **FinOps** | Planned | Planned | Planned |
+| **Security Auditor** | Planned | Planned | Planned |
+| **Compliance** | Planned | Planned | Planned |
 
 New capability = new plugin folder. Zero changes to `infra/` or `runtime/`.
 
