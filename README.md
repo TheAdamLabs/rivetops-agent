@@ -77,19 +77,23 @@ Your AWS account (everything runs here)
 
 ```hcl
 module "rivetops" {
-  source             = "github.com/TheAdamLabs/rivetops-agent//infra/terraform/aws"
-  plugin_id          = "sre"
-  sns_subscribers    = ["https://hooks.slack.com/..."]   # Slack, PagerDuty, email, or any HTTPS endpoint
+  source    = "github.com/TheAdamLabs/rivetops-agent//infra/terraform/aws"
+  plugin_id = "sre"
 
   # Optional: connect the RivetOps managed dashboard
   dashboard_endpoint = "https://api.rivetops.pro"
   connection_token   = var.rivetops_token
 }
+
+output "findings_topic_arn" {
+  value = module.rivetops.findings_topic_arn
+}
 ```
 
 ```bash
 terraform apply
-# Agent is running. Findings arrive in Slack within minutes.
+# Outputs: findings_topic_arn = arn:aws:sns:us-east-1:123456789012:rivetops-findings
+# Subscribe PagerDuty, email, or SQS to that ARN. Use AWS Chatbot for Slack.
 ```
 
 See [`infra/terraform/`](./infra/terraform/README.md) for all providers and options.

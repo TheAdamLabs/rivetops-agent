@@ -7,26 +7,30 @@ Deploys the full RivetOps agent stack into your own AWS account: Lambda function
 ## Usage
 
 ```typescript
-import { App, Stack } from "aws-cdk-lib";
+import { App, Stack, CfnOutput } from "aws-cdk-lib";
 import { RivetOpsAgent } from "rivetops-cdk-aws";
 
 const app = new App();
 const stack = new Stack(app, "RivetOpsStack");
 
-new RivetOpsAgent(stack, "RivetOps", {
+const agent = new RivetOpsAgent(stack, "RivetOps", {
   pluginId: "sre",
-  snsSubscribers: ["https://hooks.slack.com/..."],  // Slack, PagerDuty, email, or any HTTPS endpoint
 
   // Optional: connect to the RivetOps managed dashboard
   dashboardEndpoint: "https://api.rivetops.pro",
   connectionToken: process.env.RIVETOPS_TOKEN,
 });
+
+// Output the SNS topic ARN - subscribe your notification endpoints to it
+new CfnOutput(stack, "FindingsTopicArn", { value: agent.findingsTopicArn });
 ```
 
 ```bash
 cdk deploy
-# Findings arrive in Slack within minutes
+# Outputs: FindingsTopicArn = arn:aws:sns:us-east-1:123456789012:rivetops-findings
 ```
+
+The construct creates an SNS topic and outputs its ARN. You then subscribe notification endpoints to it - via the AWS console, AWS CLI, or additional CDK/Terraform resources. See `infra/terraform/README.md` for subscription examples (PagerDuty, email, SQS, AWS Chatbot for Slack).
 
 ## What gets deployed
 

@@ -21,25 +21,56 @@ Terraform modules that deploy the full RivetOps agent stack **into your own clou
 
 ```hcl
 module "rivetops" {
-  source          = "github.com/TheAdamLabs/rivetops-agent//infra/terraform/aws"
-  plugin_id       = "sre"
-  sns_subscribers = ["https://hooks.slack.com/..."]   # one or more HTTPS endpoints
+  source    = "github.com/TheAdamLabs/rivetops-agent//infra/terraform/aws"
+  plugin_id = "sre"
 
   # Optional: connect to the RivetOps managed dashboard
   dashboard_endpoint = "https://api.rivetops.pro"
   connection_token   = var.rivetops_token
 }
+
+output "findings_topic_arn" {
+  value = module.rivetops.findings_topic_arn
+}
 ```
 
 ```bash
 terraform apply
-# Findings arrive in Slack within minutes
+# Outputs: findings_topic_arn = arn:aws:sns:us-east-1:123456789012:rivetops-findings
 ```
+
+The module creates an SNS topic and outputs its ARN. Subscribe your notification endpoints to it however you prefer:
+
+```bash
+# PagerDuty (supports auto-confirmation)
+aws sns subscribe \
+  --topic-arn <findings_topic_arn> \
+  --protocol https \
+  --notification-endpoint https://events.pagerduty.com/integration/.../enqueue
+
+# Email (requires clicking a confirmation link AWS sends)
+aws sns subscribe \
+  --topic-arn <findings_topic_arn> \
+  --protocol email \
+  --notification-endpoint oncall@yourcompany.com
+
+# SQS (no confirmation required - recommended for custom integrations)
+aws sns subscribe \
+  --topic-arn <findings_topic_arn> \
+  --protocol sqs \
+  --notification-endpoint arn:aws:sqs:us-east-1:123456789012:my-queue
+```
+
+**Slack** — use [AWS Chatbot](https://docs.aws.amazon.com/chatbot/latest/adminguide/what-is.html) (configure it in the console to bridge your SNS topic to a Slack channel — no custom Lambda needed).
+
+**PagerDuty** — supports SNS auto-confirmation natively; see [PagerDuty SNS integration docs](https://support.pagerduty.com/docs/aws-cloudwatch-integration-guide).
+
+**Custom webhook** — subscribe an SQS queue to the SNS topic and consume from SQS in your own service.
 
 ## Security
 
 - Lambda reads your own account data — no cross-account role, no credentials handed to RivetOps
 - IAM execution role has `ReadOnlyAccess` scoped to your own account only
-- SNS topic is private — subscribers are HTTPS endpoints or email addresses you control
+- SNS topic is in your account — you control all subscriptions and access policies
 - Revoke access instantly by running `terraform destroy`
 - All code is open source — review before you apply

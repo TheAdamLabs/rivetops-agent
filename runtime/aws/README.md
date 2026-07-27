@@ -27,16 +27,16 @@ The AWS Lambda execution shell for the RivetOps agent. This is the code that run
 ```
 Lambda
   ↓
-SNS topic (customer's account)
-  ├── Slack webhook
-  ├── PagerDuty endpoint
-  ├── Email subscription
-  └── Any HTTPS endpoint
-  
+SNS topic (customer's account) — module outputs the ARN
+  ├── PagerDuty  (auto-confirms SNS HTTPS subscriptions natively)
+  ├── Email      (requires manual confirmation click from AWS)
+  ├── SQS        (no confirmation needed; use for custom integrations)
+  └── Slack      (via AWS Chatbot — bridges SNS to Slack without custom Lambda)
+
   + optionally → RivetOps Dashboard API (HTTPS)
 ```
 
-The SNS step is always executed. The dashboard step is skipped if no token is configured - the agent works fully standalone.
+The SNS publish step always runs. The dashboard step is skipped if no token is configured — the agent works fully standalone without it.
 
 ---
 
