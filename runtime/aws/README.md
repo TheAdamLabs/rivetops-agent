@@ -10,21 +10,43 @@ The AWS Lambda execution shell for the RivetOps agent. This is the code that run
    ```json
    {
      "pluginId": "sre",
-     "apiEndpoint": "https://api.rivetops.pro",
+     "snsTopicArn": "arn:aws:sns:us-east-1:123456789012:rivetops-findings",
+     "dashboardEndpoint": "https://api.rivetops.pro",
      "token": "<per-tenant bearer token>"
    }
    ```
 2. Boots the Pi SDK and loads the specified plugin from `plugins/<pluginId>`.
 3. Plugin reads CloudWatch, CloudTrail, EC2, ECS, EKS using the Lambda's own IAM execution role (same account - no cross-account needed).
-4. Posts structured findings to the RivetOps findings API over HTTPS.
+4. Publishes structured findings to the SNS topic in the customer's account - subscribers (Slack, PagerDuty, email, webhook) receive them immediately.
+5. Optionally posts findings to the RivetOps dashboard API over HTTPS if `dashboardEndpoint` and `token` are provided.
+
+---
+
+## Notification flow
+
+```
+Lambda
+  ↓
+SNS topic (customer's account)
+  ├── Slack webhook
+  ├── PagerDuty endpoint
+  ├── Email subscription
+  └── Any HTTPS endpoint
+  
+  + optionally → RivetOps Dashboard API (HTTPS)
+```
+
+The SNS step is always executed. The dashboard step is skipped if no token is configured - the agent works fully standalone.
 
 ---
 
 ## IAM execution role
 
-The Lambda's IAM execution role (created by `infra/terraform/aws`) has read-only access to the customer's own account. It never reaches outside the customer's AWS account.
+The Lambda's IAM execution role (created by `infra/terraform/aws`) has:
+- `ReadOnlyAccess` to the customer's own account (CloudWatch, CloudTrail, EC2, ECS, EKS)
+- `sns:Publish` to the findings SNS topic
 
-Permissions attached: `ReadOnlyAccess` scoped to the same account.
+It never reaches outside the customer's AWS account.
 
 ---
 

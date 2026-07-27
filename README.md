@@ -6,7 +6,7 @@
 
 **The full RivetOps agent stack - runs entirely in your own cloud account.**
 
-AI cloud monitoring for AWS, Azure, and GCP — autonomous, 24/7, no dashboards.
+AI cloud monitoring for AWS, Azure, and GCP — autonomous, 24/7.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-orange.svg)](./LICENSE)
 [![Website](https://img.shields.io/badge/website-rivetops.pro-orange)](https://rivetops.pro)
@@ -30,7 +30,7 @@ plugins/
 └── sre/               SRE intelligence — anomaly detection, incident correlation
 ```
 
-**`infra/`** — what you run once to deploy the agent into your account. Deploys the Lambda, EventBridge scheduler, and IAM execution role.
+**`infra/`** — what you run once to deploy the agent into your account. Deploys the Lambda, EventBridge scheduler, IAM execution role, and notification topic.
 
 **`runtime/`** — the Lambda handler code. Packaged by `infra/` during deployment. Not deployed standalone.
 
@@ -40,27 +40,36 @@ plugins/
 
 ## How it works
 
-The entire agent runs **in your own cloud account**. RivetOps hosts only the dashboard.
+The entire agent runs **in your own cloud account**. Findings are delivered via a cloud-native notification topic in your account — no RivetOps dependency required. Connecting the dashboard is optional and adds historical view, cross-account aggregation, and richer alerting.
 
 ```
 Your AWS account (everything runs here)
-┌──────────────────────────────────────────────────────┐
-│  EventBridge Scheduler (every 5 minutes)             │
-│        ↓                                             │
-│  Lambda  ←  runtime/aws  +  plugins/sre              │
-│        ↓ reads your own account data                 │
-│  CloudWatch / CloudTrail / EC2 / ECS / EKS           │
-└──────────────────────────────────────────────────────┘
-          ↓ posts findings via HTTPS
-┌─────────────────────────────────┐
-│  RivetOps Dashboard (private)   │
-└─────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│  EventBridge Scheduler (every 5 minutes)                   │
+│        ↓                                                   │
+│  Lambda  ←  runtime/aws  +  plugins/sre                    │
+│        ↓ reads your own account data                       │
+│  CloudWatch / CloudTrail / EC2 / ECS / EKS                 │
+│        ↓                                                   │
+│  SNS Topic  ──→  Slack / PagerDuty / email / webhook       │
+└────────────────────────────────────────────────────────────┘
+          ↓ also posts findings via HTTPS (optional)
+┌─────────────────────────────────────────────┐
+│  RivetOps Dashboard — rivetops.pro          │
+│  historical view, multi-account, richer UI  │
+└─────────────────────────────────────────────┘
 ```
 
-1. Run `infra/terraform` or `infra/cdk` — deploys the full agent stack into your account.
-2. Paste the connection token into the [RivetOps dashboard](https://rivetops.pro).
-3. The Lambda runs on a schedule, loads `plugins/sre`, reads your CloudWatch / CloudTrail / EC2.
-4. Findings appear in the dashboard. Your on-call team gets notified before the pager fires.
+| Cloud | Notification service |
+|-------|---------------------|
+| AWS | SNS |
+| Azure | Event Grid |
+| GCP | Pub/Sub |
+
+1. Run `infra/terraform` or `infra/cdk` — deploys Lambda, EventBridge scheduler, SNS topic, and IAM execution role into your account.
+2. Subscribe your Slack webhook, PagerDuty endpoint, or email address to the SNS topic.
+3. Optionally paste the connection token into the [RivetOps dashboard](https://rivetops.pro) for historical view and richer UI.
+4. The Lambda runs on a schedule, loads `plugins/sre`, reads your CloudWatch / CloudTrail / EC2, and publishes findings to SNS.
 
 ---
 
@@ -70,6 +79,9 @@ Your AWS account (everything runs here)
 module "rivetops" {
   source             = "github.com/TheAdamLabs/rivetops-agent//infra/terraform/aws"
   plugin_id          = "sre"
+  sns_subscribers    = ["https://hooks.slack.com/..."]   # Slack, PagerDuty, email, or any HTTPS endpoint
+
+  # Optional: connect the RivetOps managed dashboard
   dashboard_endpoint = "https://api.rivetops.pro"
   connection_token   = var.rivetops_token
 }
@@ -77,7 +89,7 @@ module "rivetops" {
 
 ```bash
 terraform apply
-# Agent is running in your account
+# Agent is running. Findings arrive in Slack within minutes.
 ```
 
 See [`infra/terraform/`](./infra/terraform/README.md) for all providers and options.
