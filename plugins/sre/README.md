@@ -38,8 +38,7 @@ The plugin forces the LLM to emit structured JSON. Fields are split into two gro
     ],
     "explanation": "Sustained CPU spike with correlated ELB errors suggests an OOM condition or compute-bound loop. Possible memory leak or recent code change.",
     "action": "Check application logs on the instance. Review recent deployments. Consider a memory profile or instance resize.",
-    "confidence": 0.91,
-    "context_tokens": 4812
+    "confidence": 0.91
   }
 }
 ```
