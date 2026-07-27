@@ -106,7 +106,6 @@ For cascading or correlated anomalies, the plugin populates `correlated_resource
   "resource_type": "ec2",
   "region": "us-east-1",
   "severity": "HIGH",
-  "state": "OPEN",
   "signals": ["CPU at 94% for 15 min", "ELB 5xx rate correlated at 12%"],
   "explanation": "...",
   "action": "...",
@@ -115,10 +114,10 @@ For cascading or correlated anomalies, the plugin populates `correlated_resource
 }
 ```
 
-`state` is set by `runtime/aws` based on DynamoDB deduplication state (`OPEN`, `RE_ALERT`, `RESOLVED`) — the plugin itself does not set it.
+RivetOps does not track incident lifecycle (open/resolved). That is the responsibility of the customer's alerting tool (PagerDuty dedup keys, Opsgenie alert deduplication, etc.). The `fingerprint` field is included so downstream tools can implement their own grouping if needed.
 
 ---
 
 ## Status
 
-Active development. Targets the Operational Excellence, Reliability, and Performance pillars.
+Planned. Targets the Operational Excellence, Reliability, and Performance pillars.

@@ -2,7 +2,7 @@
 
 AWS CDK TypeScript construct — equivalent to `infra/terraform/aws/` for teams using CDK.
 
-Deploys the full RivetOps agent stack into your own AWS account: Lambda function, EventBridge scheduler, SNS notification topic, and IAM execution role.
+Deploys the full RivetOps agent stack into your own AWS account: Lambda function, EventBridge scheduler, SNS topic, DynamoDB suppression table, and IAM execution role.
 
 ## Usage
 
@@ -15,6 +15,7 @@ const stack = new Stack(app, "RivetOpsStack");
 
 const agent = new RivetOpsAgent(stack, "RivetOps", {
   pluginId: "sre",
+  suppressionWindowHours: 4,      // default; how long to suppress re-alerts for the same finding
 
   // Optional: connect to the RivetOps managed dashboard
   dashboardEndpoint: "https://api.rivetops.pro",
@@ -37,7 +38,8 @@ The construct creates an SNS topic and outputs its ARN. You then subscribe notif
 - Lambda function (packages `runtime/aws` + the specified plugin)
 - EventBridge rule (triggers Lambda every 5 minutes by default)
 - SNS topic (receives findings; you control subscribers)
-- IAM execution role (read-only access to your own account)
+- DynamoDB table (alert suppression state, TTL-managed, on-demand billing)
+- IAM execution role (read-only access to your own account + scoped SNS + DynamoDB permissions)
 
 ## Security
 

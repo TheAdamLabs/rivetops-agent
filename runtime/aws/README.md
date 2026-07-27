@@ -19,68 +19,56 @@ The AWS Lambda execution shell for the RivetOps agent. Runs **inside the custome
    ```
 2. Boots the Pi SDK and loads the specified plugin from `plugins/<pluginId>`.
 3. Plugin reads CloudWatch, CloudTrail, EC2, ECS, EKS using the Lambda's IAM execution role.
-4. Plugin returns a structured finding with fingerprint fields and narrative fields (see `plugins/sre/README.md`).
-5. Runtime checks DynamoDB for the finding fingerprint and applies deduplication logic.
-6. Publishes to SNS only on state transitions (OPEN, RE_ALERT, RESOLVED).
-7. Optionally posts all findings to the RivetOps dashboard API regardless of suppression.
+4. Plugin returns a list of structured findings with fingerprint fields and narrative fields (see `plugins/sre/README.md`).
+5. For each finding: checks DynamoDB to decide whether SNS should fire (rate limiting).
+6. Publishes to SNS for findings outside their suppression window.
+7. Posts all findings to the RivetOps dashboard API regardless of suppression (optional).
 
 ---
 
-## Deduplication
+## Alert suppression
 
-LLM output is non-deterministic — the same condition produces different explanation text every run. To avoid re-alerting on the same open incident every 5 minutes, the runtime deduplicates on the **fingerprint fields** defined by the plugin, not on the narrative.
+The plugin runs every N minutes. Without suppression, the same CPU spike would page someone every 5 minutes. RivetOps solves this with a simple rate-limit: a DynamoDB record acts as a "do not re-alert" token for a configurable window.
 
 ```
 fingerprint = hash(anomaly_type + primary_resource + sorted(correlated_resources) + region)
+
+For each finding:
+  fingerprint in DynamoDB?
+    NO  → publish to SNS + write DynamoDB record (TTL = now + suppressionWindowHours)
+    YES → skip SNS (still within suppression window)
+
+TTL expires → record deleted automatically → next detection triggers a fresh alert
 ```
 
-### State machine
-
-```
-           first seen
-               ↓
-[ OPEN ] ─── SNS: "new finding" ──────────────────────────┐
-               │                                           │
-               │ still present after suppression window    │
-               ↓                                           │
-[ RE_ALERT ] ─ SNS: "still open after Nh" ─ refresh TTL  │
-               │                                           │
-               │ condition cleared on next run             │
-               ↓                                           │
-[ RESOLVED ] ─ SNS: "resolved" ─ delete DynamoDB record ──┘
-```
-
-SNS only fires on: **OPEN** (first occurrence), **RE_ALERT** (still present after suppression window), **RESOLVED** (condition cleared). Repeated detections within the suppression window are silent.
+This is rate limiting, not incident lifecycle management. There is no explicit "resolved" event — incident lifecycle is the customer's alerting tool's responsibility (PagerDuty dedup keys, Opsgenie alert deduplication, etc.).
 
 ### DynamoDB record
 
 ```json
 {
-  "fingerprint":    "a3f9c2...",
-  "state":          "OPEN",
-  "anomaly_type":   "cpu_spike",
+  "fingerprint":      "a3f9c2...",
+  "anomaly_type":     "cpu_spike",
   "primary_resource": "i-0abc123def456789",
-  "region":         "us-east-1",
-  "first_seen":     1722110400,
-  "last_seen":      1722110400,
-  "ttl":            1722124800
+  "region":           "us-east-1",
+  "last_alerted":     1722110400,
+  "ttl":              1722124800
 }
 ```
 
-`ttl` is set to `now + suppressionWindowHours`. DynamoDB auto-deletes expired records — no cleanup Lambda needed. On each run where the condition still holds, the runtime updates `last_seen` and refreshes `ttl`.
+`ttl` is set to `now + suppressionWindowHours`. DynamoDB auto-deletes expired records — no cleanup Lambda needed.
 
 ---
 
 ## Notification flow
 
 ```
-Plugin returns finding
+Plugin returns findings list
   ↓
-Check DynamoDB fingerprint
-  ├── Not found       → state = OPEN    → publish to SNS + write DynamoDB
-  ├── Found, TTL live → state = SUSTAINED → skip SNS, update last_seen
-  ├── Found, TTL expired → state = RE_ALERT → publish to SNS + refresh TTL
-  └── Was OPEN, now cleared → state = RESOLVED → publish to SNS + delete record
+For each finding:
+  Check DynamoDB fingerprint
+  ├── Not found (or TTL expired) → publish to SNS + write/refresh DynamoDB
+  └── Found (within window)      → skip SNS
 
 SNS topic (customer's account)
   ├── PagerDuty  (auto-confirms SNS HTTPS subscriptions natively)
@@ -88,7 +76,7 @@ SNS topic (customer's account)
   ├── SQS        (no confirmation needed; use for custom integrations)
   └── Slack      (via AWS Chatbot)
 
-  + all findings (including SUSTAINED) → RivetOps Dashboard API (optional)
+All findings (including suppressed) → RivetOps Dashboard API (optional)
 ```
 
 ---
@@ -112,7 +100,7 @@ Never reaches outside the customer's AWS account.
 - Lambda function (this code + specified plugin)
 - EventBridge rule + scheduler
 - SNS topic (customer subscribes their own endpoints)
-- DynamoDB table (finding state, on-demand billing, TTL enabled)
+- DynamoDB table (suppression state, on-demand billing, TTL enabled)
 - IAM execution role with the permissions above
 
 ---

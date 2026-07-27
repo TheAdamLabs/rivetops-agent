@@ -22,8 +22,9 @@ Terraform modules that deploy the full RivetOps agent stack **into your own clou
 
 ```hcl
 module "rivetops" {
-  source    = "github.com/TheAdamLabs/rivetops-agent//infra/terraform/aws"
-  plugin_id = "sre"
+  source                  = "github.com/TheAdamLabs/rivetops-agent//infra/terraform/aws"
+  plugin_id               = "sre"
+  suppression_window_hours = 4    # how long to suppress re-alerts for the same finding
 
   # Optional: connect to the RivetOps managed dashboard
   dashboard_endpoint = "https://api.rivetops.pro"

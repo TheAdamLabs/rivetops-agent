@@ -66,10 +66,10 @@ Your AWS account (everything runs here)
 | Azure | Event Grid |
 | GCP | Pub/Sub |
 
-1. Run `infra/terraform` or `infra/cdk` — deploys Lambda, EventBridge scheduler, SNS topic, and IAM execution role into your account.
-2. Subscribe your Slack webhook, PagerDuty endpoint, or email address to the SNS topic.
+1. Run `infra/terraform` or `infra/cdk` — deploys Lambda, EventBridge scheduler, SNS topic, DynamoDB suppression table, and IAM execution role into your account.
+2. Subscribe PagerDuty, email, or SQS to the SNS topic ARN that is output. Use [AWS Chatbot](https://docs.aws.amazon.com/chatbot/latest/adminguide/what-is.html) for Slack.
 3. Optionally paste the connection token into the [RivetOps dashboard](https://rivetops.pro) for historical view and richer UI.
-4. The Lambda runs on a schedule, loads `plugins/sre`, reads your CloudWatch / CloudTrail / EC2, and publishes findings to SNS.
+4. The Lambda runs on a schedule, loads `plugins/sre`, reads your CloudWatch / CloudTrail / EC2, and publishes findings to SNS — suppressing re-alerts for the same finding within the configured window.
 
 ---
 
@@ -115,7 +115,7 @@ See [`infra/terraform/`](./infra/terraform/README.md) for all providers and opti
 
 | Plugin | Capability | Status |
 |--------|------------|--------|
-| `plugins/sre` | Anomaly detection, incident correlation | Live |
+| `plugins/sre` | Anomaly detection, incident correlation | In Development |
 | `plugins/finops` | Cost anomaly, rightsizing | Q3 2026 |
 | `plugins/security` | IAM drift, misconfiguration | Q4 2026 |
 | `plugins/compliance` | CIS benchmarks, audit trails | 2027 |
